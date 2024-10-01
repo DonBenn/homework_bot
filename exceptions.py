@@ -12,9 +12,9 @@ class WrongAnswer(Exception):
     pass
 
 
-class NotValidHomework(Exception):
-    """Класс в котором проверяются все исключения если переменная
-    homework не корректная
+class MessageFailure(Exception):
+    """Класс в котором проверяются исключения если отправка
+    сообщения не корректная
     """
     pass
 
