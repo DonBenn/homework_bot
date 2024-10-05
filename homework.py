@@ -139,7 +139,8 @@ def main(): # noqa
             homeworks = check_response(response)
             if not homeworks:
                 logging.debug('Изменений статуса не найденно')
-                return False
+                time.sleep(RETRY_PERIOD)
+                continue
             homework = homeworks[0]
             message = parse_status(homework)
             if last_message != message:
