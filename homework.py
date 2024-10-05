@@ -9,7 +9,7 @@ from telegram.error import TelegramError  # type: ignore
 import requests  # type: ignore
 
 from exceptions import (
-    NoEnvironmentVariable, WrongAnswer, MessageFailure
+    NoEnvironmentVariable, WrongAnswer
 )
 
 
@@ -70,17 +70,16 @@ def check_response(response):
             'Ожидается словарь response, но получен другой тип данных'
         )
     try:
-        homeworks_list = response['homeworks']
+        homeworks = response['homeworks']
     except KeyError as error:
         raise KeyError(f'{error} Нет ключа homeworks в ответe')
 
-    if not isinstance(homeworks_list, list):
+    if not isinstance(homeworks, list):
         raise TypeError(f'Ожидается список homeworks,'
                         f'но получен {type(response["homeworks"])}'
                         )
-    homework = homeworks_list
 
-    return homework
+    return homeworks
 
 
 def parse_status(homework):
@@ -93,6 +92,9 @@ def parse_status(homework):
         )
     if 'homework_name' not in homework:
         raise KeyError('Ожидается ключ homework_name')
+    if 'status' not in homework:
+        raise KeyError('Ожидается ключ status')
+
     status = homework.get('status')
     homework_name = homework.get('homework_name')
 
@@ -110,53 +112,47 @@ def send_message(bot, message):
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
         logging.debug('Успешная отправка сообщения')
         return True
-    except TelegramError as error:
-        raise MessageFailure(f'Ошибка Telegram: {error}')
-    except requests.RequestException as error:
-        raise MessageFailure(f'Ошибка отправки сообщения: {error}')
+    except TelegramError:
+        return False
+    except requests.RequestException:
+        return False
 
     except Exception as error:
         logging.error(f'Неожиданная ошибка отправки сообщения: {error}')
 
-    return False
+        return False
 
 
 def main(): # noqa
     """Основная логика работы бота."""
     try:
-        if not check_tokens():
-            return False
+        check_tokens()
     except NoEnvironmentVariable as error:
-        logging.critical(f'Отсутствует токен {error}')
-        return False
+        logging.critical(f'Отсутствует токен: {error}')
+        sys.exit(1)
     bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     last_message = None
     while True:
         try:
             response = get_api_answer(timestamp)
-            homework = check_response(response)
-            if homework:
-                if len(homework) > 0:
-                    homework = homework[0]
-                    message = parse_status(homework)
-                    if last_message != message:
-                        if send_message(bot, message):
-                            last_message = message
-                            timestamp = response['current_date']
-            else:
+            homeworks = check_response(response)
+            if not homeworks:
                 logging.debug('Изменений статуса не найденно')
-                message = 'Изменений статуса не найденно'
-                if last_message != message:
-                    if send_message(bot, message):
-                        last_message = message
-            time.sleep(RETRY_PERIOD)
+                return False
+            homework = homeworks[0]
+            message = parse_status(homework)
+            if last_message != message:
+                if send_message(bot, message):
+                    last_message = message
+                    timestamp = response['current_date']
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logging.error(f'Сбой в работе программы: {error}')
             if last_message != message:
                 if send_message(bot, message):
                     last_message = message
+        time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
@@ -164,8 +160,9 @@ if __name__ == '__main__':
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[logging.StreamHandler(stream=sys.stdout)],
         encoding='utf-8',
+        filename='main.log',
+        filemode='w'
     )
 
     main()

@@ -10,10 +10,3 @@ class WrongAnswer(Exception):
     положительного ответа
     """
     pass
-
-
-class MessageFailure(Exception):
-    """Класс в котором проверяются исключения если отправка
-    сообщения не корректная
-    """
-    pass
