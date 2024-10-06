@@ -12,9 +12,7 @@ from exceptions import (
     NoEnvironmentVariable, WrongAnswer
 )
 
-
 load_dotenv()
-
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -37,13 +35,13 @@ def check_tokens():
               'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
               'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID,
               }
-    for name, value in tokens.items():
-        if not value:
-            raise NoEnvironmentVariable(f'Отсутствуют токен {name}')
+    invalid_tokens = [name for name, value in tokens.items() if not value]
+
+    if invalid_tokens:
+        raise NoEnvironmentVariable(
+            f'Отсутствуют токены: {", ".join(invalid_tokens)}')
     if not ENDPOINT:
         raise NoEnvironmentVariable('Ошибка: ENDPOINT не определен')
-
-    return True
 
 
 def get_api_answer(timestamp):
@@ -112,15 +110,13 @@ def send_message(bot, message):
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
         logging.debug('Успешная отправка сообщения')
         return True
-    except TelegramError:
-        return False
-    except requests.RequestException:
-        return False
-
+    except TelegramError as error:
+        logging.error(f'Ошибка Telegram: {error}')
+    except requests.RequestException as error:
+        logging.error(f'Ошибка отправки сообщения: {error}')
     except Exception as error:
         logging.error(f'Неожиданная ошибка отправки сообщения: {error}')
 
-        return False
 
 
 def main(): # noqa
@@ -128,7 +124,8 @@ def main(): # noqa
     try:
         check_tokens()
     except NoEnvironmentVariable as error:
-        logging.critical(f'Отсутствует токен: {error}')
+        logging.critical(f'Отсутствует переменная окружения или'
+                         f' недоступен эндпоинт: {error}')
         sys.exit(1)
     bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
@@ -139,21 +136,21 @@ def main(): # noqa
             homeworks = check_response(response)
             if not homeworks:
                 logging.debug('Изменений статуса не найденно')
-                time.sleep(RETRY_PERIOD)
                 continue
             homework = homeworks[0]
             message = parse_status(homework)
-            if last_message != message:
-                if send_message(bot, message):
-                    last_message = message
-                    timestamp = response['current_date']
+            if last_message != message and send_message(bot, message):
+                last_message = message
+                timestamp = response['current_date']
+                now_timestamp = response.get('current_date', timestamp)
+                timestamp = now_timestamp
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logging.error(f'Сбой в работе программы: {error}')
-            if last_message != message:
-                if send_message(bot, message):
-                    last_message = message
-        time.sleep(RETRY_PERIOD)
+            if last_message != message and send_message(bot, message):
+                last_message = message
+        finally:
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
@@ -162,8 +159,10 @@ if __name__ == '__main__':
         level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         encoding='utf-8',
-        filename='main.log',
-        filemode='w'
+        handlers=[
+            logging.StreamHandler(stream=sys.stdout),
+            logging.FileHandler(__file__ + '.log', mode='w', encoding='utf-8')
+        ]
     )
 
     main()
