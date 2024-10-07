@@ -51,9 +51,8 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(
             ENDPOINT, headers=HEADERS, params={'from_date': timestamp})
-        response.raise_for_status()
     except requests.exceptions.RequestException as error:
-        raise WrongAnswer(f'Ошибка: {error}:')
+        raise WrongAnswer(f'Ошибка при выполнении HTTP-запроса: {error}:')
 
     if response.status_code != 200:
         raise WrongAnswer(f'Ошибка: Статус не ОК {response.status_code}:')
@@ -88,18 +87,16 @@ def parse_status(homework):
         raise TypeError(
             'Ожидается словарь homeworks, но получен другой тип данных'
         )
-    if 'homework_name' not in homework:
-        raise KeyError('Ожидается ключ homework_name')
-    if 'status' not in homework:
-        raise KeyError('Ожидается ключ status')
-
-    status = homework.get('status')
-    homework_name = homework.get('homework_name')
-
-    if status not in HOMEWORK_VERDICTS:
+    try:
+        homework_name = homework['homework_name']
+        status = homework['status']
+    except KeyError as error:
+        raise KeyError(f'Отсутвует ключ {error} '
+                       f'Ожидаются ключи homework_name и status')
+    try:
+        verdict = HOMEWORK_VERDICTS[status]
+    except KeyError:
         raise ValueError('Нет такого значения в HOMEWORK_VERDICTS')
-
-    verdict = HOMEWORK_VERDICTS[status]
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -117,6 +114,7 @@ def send_message(bot, message):
     except Exception as error:
         logging.error(f'Неожиданная ошибка отправки сообщения: {error}')
 
+    return False
 
 
 def main(): # noqa
@@ -141,9 +139,7 @@ def main(): # noqa
             message = parse_status(homework)
             if last_message != message and send_message(bot, message):
                 last_message = message
-                timestamp = response['current_date']
-                now_timestamp = response.get('current_date', timestamp)
-                timestamp = now_timestamp
+                timestamp = response.get('current_date', timestamp)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logging.error(f'Сбой в работе программы: {error}')
