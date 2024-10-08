@@ -89,10 +89,14 @@ def parse_status(homework):
         )
     try:
         homework_name = homework['homework_name']
+    except KeyError as error:
+        raise KeyError(f'Отсутвует ключ {error} '
+                       f'Ожидается ключ homework_name')
+    try:
         status = homework['status']
     except KeyError as error:
         raise KeyError(f'Отсутвует ключ {error} '
-                       f'Ожидаются ключи homework_name и status')
+                       f'Ожидается ключ status')
     try:
         verdict = HOMEWORK_VERDICTS[status]
     except KeyError:
