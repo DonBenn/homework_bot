@@ -53,3 +53,7 @@ touch .evn
 ```
 python homework.py
 ```
+
+### Автор
+
+Bessonov Denis (https://github.com/DonBenn)
